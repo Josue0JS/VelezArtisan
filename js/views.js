@@ -406,9 +406,10 @@ const NAVG = [
     ["", ["res"]],
     ["Operación", ["ventas", "inv", "ped", "rec", "mer"]],
     ["Catálogo", ["prod", "prov"]],
+    ["Equipo", ["hor"]],
     ["", ["ayuda"]],
   ],
-  SEC = ["rec", "mer", "prod", "prov", "ayuda"],
+  SEC = ["rec", "mer", "prod", "prov", "hor", "ayuda"],
   MORE =
     "<svg viewBox='0 0 24 24' aria-hidden='true'><circle cx='5' cy='12' r='1.3'/><circle cx='12' cy='12' r='1.3'/><circle cx='19' cy='12' r='1.3'/></svg>";
 
