@@ -25,7 +25,7 @@ function lmsg(m) {
 async function init() {
   if (!window.firebase || /PEGA_AQUI|TU-PROYECTO/.test(JSON.stringify(FIREBASE_CONFIG))) {
     $("#lg").className = "on";
-    $("#lb").disabled = false;
+    $("#lb").disabled = true;
     return;
   }
   firebase.initializeApp(FIREBASE_CONFIG);
