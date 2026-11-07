@@ -8,7 +8,7 @@
     />
     <link
       rel="icon"
-      href="https://upload.wikimedia.org/wikipedia/commons/7/7b/LOGO_MARCA_V%C3%89LEZ.png?utm_source=es.wikipedia.org&utm_campaign=index&utm_content=original"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%98%95%3C/text%3E%3C/svg%3E"
     />
     <title>ARTISAN CAFÉ · Inventario</title>
     <link
@@ -1815,6 +1815,58 @@
           0 4px 14px rgba(40, 60, 60, 0.14),
           inset 0 0 0 1px rgba(40, 50, 48, 0.12);
       }
+      .cd.sec {
+        padding: 0;
+        overflow: hidden;
+      }
+      .sh2 {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+        background: none;
+        border: 0;
+        padding: 14px 16px;
+        text-align: left;
+        font:
+          700 16px "Bricolage Grotesque",
+          "DM Sans",
+          sans-serif;
+        color: var(--tx);
+      }
+      .sh2 .chp {
+        font:
+          600 12px "DM Sans",
+          sans-serif;
+      }
+      .sh2 .cv {
+        margin-left: auto;
+        width: 8px;
+        height: 8px;
+        border-right: 2px solid currentColor;
+        border-bottom: 2px solid currentColor;
+        transform: rotate(45deg);
+        transition: transform 0.25s;
+        margin-right: 4px;
+      }
+      .sec.col .cv {
+        transform: rotate(-45deg);
+      }
+      .sec .sb {
+        padding: 0 16px 14px;
+      }
+      .sec.col .sb {
+        display: none;
+      }
+      .sec:not(.col) .sb {
+        animation: fade 0.25s;
+      }
+      .sec .tg {
+        margin-bottom: 0;
+      }
+      .sec .pr {
+        margin: 0;
+      }
       #lg {
         position: fixed;
         inset: 0;
@@ -2051,7 +2103,15 @@
           cal: [],
           cfg: {},
         },
-        D = { name: "", price: "", steps: "", photo: "", lines: [] };
+        D = {
+          name: "",
+          price: "",
+          steps: "",
+          photo: "",
+          cat: "",
+          catn: "",
+          lines: [],
+        };
       const C = { ing: {}, prod: {}, led: {}, prov: {}, cfg: {}, cal: {} },
         LK = "cafe3";
       let DB = null,
@@ -2148,10 +2208,10 @@
         draw();
       }
       const FIREBASE_CONFIG = {
-        apiKey: "AIzaSyDwjL1CmmMTqFh8PVYeuTHk7c_wV5qEhdA",
-        authDomain: "velezartisan.firebaseapp.com",
-        projectId: "velezartisan",
-        appId: "1:169095749123:web:571d033abbd52cc6a13836",
+        apiKey: "PEGA_AQUI_TU_API_KEY",
+        authDomain: "TU-PROYECTO.firebaseapp.com",
+        projectId: "TU-PROYECTO",
+        appId: "PEGA_AQUI_TU_APP_ID",
       };
       let AUTH = null,
         UNSUB = [];
@@ -2333,6 +2393,11 @@
         open: "",
         cart: {},
         col: "eq",
+        vq: "",
+        pq: "",
+        cl: {},
+        ci: {},
+        cp: {},
         vd: today(),
         wp: 30,
         del: "",
@@ -2527,15 +2592,7 @@
               "Toca un producto para sumarlo a la cuenta",
               `<input type="date" value="${ui.vd}" onchange="ui.vd=this.value;draw()" style="width:auto">`,
             ) +
-            (S.prod.length
-              ? `<div class="tg">${S.prod
-                  .map((p) => {
-                    const a = avail(p),
-                      q = ui.cart[p.id] || 0;
-                    return `<div class="tl ${a <= 0 ? "off" : ""} ${q ? "sel" : ""} ${ui.last == p.id ? "bump" : ""}" onclick="add('${p.id}',1)">${p.photo ? `<img src="${p.photo}" alt="">` : `<div class="ph">${esc((p.name || "?")[0].toUpperCase())}</div>`}<div class="tb"><b>${esc(p.name)}</b><span class="mu">${money(p.price)} · ${a <= 0 ? "sin stock" : "disp. " + a}</span></div>${q ? `<div class="qb"><button aria-label="Quitar uno" onclick="event.stopPropagation();add('${p.id}',-1)">−</button><span>${q}</span><button aria-label="Agregar uno">+</button></div>` : ""}</div>`;
-                  })
-                  .join("")}</div>`
-              : `<div class="empty"><p>Aún no tienes productos con receta.</p><button class="btn" onclick="go('prod');prodModal()">Crear producto</button></div>`) +
+            `<div class="tb2"><input class="se" id="vs" type="search" placeholder="Buscar producto… (Enter agrega el primero)" aria-label="Buscar producto" value="${esc(ui.vq)}" oninput="ui.vq=this.value;$('#vl').innerHTML=ventasList()" onkeydown="if(event.key=='Enter')vEnter()"></div><div id="vl">${ventasList()}</div>` +
             `<div class="cd"><div class="hd" style="margin:0 0 6px"><h2>Vendido el ${ui.vd}</h2><b>${money(tot)}</b></div>${l.map((s) => `<div class="li"><span>${esc(s.nm)} <span class="mu">× ${s.qty}</span></span><span>${money(s.rev)} <button class="btn x" onclick="delSale('${s.id}')">Anular</button></span></div>`).join("") || `<p class="mu">Sin ventas registradas este día.</p>`}</div>`
           );
         },
@@ -2553,7 +2610,7 @@
               "Existencias por ingrediente. La marca vertical de la barra indica el mínimo.",
               `<button class="btn" onclick="ingModal()">+ Ingrediente</button>`,
             ) +
-            `<div class="tb2"><input class="se" placeholder="Buscar ingrediente…" aria-label="Buscar ingrediente" value="${esc(ui.q)}" oninput="ui.q=this.value;$('#lst').innerHTML=invList()"><div class="chips">${ch.map(([v, l]) => `<button class="${ui.cat == v ? "on" : ""}" data-c="${esc(v)}" onclick="ui.cat=this.dataset.c;draw()">${esc(l)}</button>`).join("")}</div></div><div class="cd" id="lst">${invList()}</div>`
+            `<div class="tb2"><input class="se" placeholder="Buscar ingrediente…" aria-label="Buscar ingrediente" value="${esc(ui.q)}" oninput="ui.q=this.value;$('#lst').innerHTML=invList()"><div class="chips">${ch.map(([v, l]) => `<button class="${ui.cat == v ? "on" : ""}" data-c="${esc(v)}" onclick="ui.cat=this.dataset.c;draw()">${esc(l)}</button>`).join("")}</div></div><div id="lst">${invList()}</div>`
           );
         },
         ped() {
@@ -2725,10 +2782,10 @@
           return (
             head(
               "Productos y recetas",
-              "Lo que vendes, su precio y con qué ingredientes se prepara",
+              "Lo que vendes, su precio y con qué ingredientes se prepara, organizado por categoría",
               `<button class="btn" onclick="prodModal()">+ Producto</button>`,
             ) +
-            `<div class="pr">${S.prod.map((p) => `<div class="pc">${p.photo ? `<img src="${p.photo}" alt="${esc(p.name)}">` : `<div class="ph">${esc((p.name || "?")[0].toUpperCase())}</div>`}<div class="tb"><h2 style="margin:0">${esc(p.name)}</h2><p class="pcp">${money(p.price)}</p><pre>${p.lines.map((l) => `${r2(l.qty)} ${esc(I(l.iid)?.unit || "")} ${esc(I(l.iid)?.name || "(eliminado)")}`).join("\n")}</pre>${p.steps ? `<pre>${esc(p.steps)}</pre>` : ""}<button class="btn x" onclick="ask('p${p.id}',()=>delProd('${p.id}'))">Eliminar</button></div></div>`).join("") || `<div class="empty"><p>Crea tu primer producto con su receta y foto.</p><button class="btn" onclick="prodModal()">Crear producto</button></div>`}</div>`
+            `<div class="tb2"><input class="se" type="search" placeholder="Buscar producto…" aria-label="Buscar producto" value="${esc(ui.pq)}" oninput="ui.pq=this.value;$('#pl').innerHTML=prodList()"></div><div id="pl">${prodList()}</div>`
           );
         },
         rec() {
@@ -2803,11 +2860,11 @@
             ) +
             d(
               "Productos y recetas",
-              `<p>La receta dice cuánto de cada ingrediente lleva <b>una</b> unidad vendida. El producto guarda su precio de venta en COP. La foto se recorta cuadrada; con Zoom, Horizontal y Vertical eliges el encuadre.</p>`,
+              `<p>La receta dice cuánto de cada ingrediente lleva <b>una</b> unidad vendida. El producto guarda su precio de venta en COP. La foto se recorta cuadrada; con Zoom, Horizontal y Vertical eliges el encuadre.</p><p>Al crear un producto eliges su <b>categoría</b> (Bebidas calientes, Bebidas frías, Panadería…) o creas una nueva. Después puedes cambiarla con el botón <b>Categoría</b> de su tarjeta. Los ingredientes también se agrupan por categoría en el Inventario.</p>`,
             ) +
             d(
               "Ventas",
-              `<p>Toca las tarjetas para armar la cuenta y pulsa <b>Registrar venta</b>. Se descuentan los ingredientes de cada receta. El número “disp.” indica cuántas unidades alcanzan con lo que hay. Si te equivocas, <b>Anular</b> devuelve los ingredientes. Puedes cambiar la fecha arriba para registrar un día anterior.</p>`,
+              `<p>Toca las tarjetas para armar la cuenta y pulsa <b>Registrar venta</b>. Se descuentan los ingredientes de cada receta. El número “disp.” indica cuántas unidades alcanzan con lo que hay. Si te equivocas, <b>Anular</b> devuelve los ingredientes. Puedes cambiar la fecha arriba para registrar un día anterior.</p><p>Usa el <b>buscador</b> para encontrar un producto sin desplazarte (con Enter agregas el primero). Los productos están agrupados por categoría y puedes plegar cada grupo tocando su título.</p>`,
             ) +
             d(
               "Pedidos y predicción",
@@ -2833,6 +2890,18 @@
           );
         },
       };
+      const rowHtml = (p) => {
+        const st =
+            p.stock <= 0
+              ? ["Agotado", "bd"]
+              : p.stock <= p.min
+                ? ["Bajo", "bd"]
+                : p.stock <= p.min * 1.5
+                  ? ["Por acabarse", "wn"]
+                  : ["Bien", "ok"],
+          sp = supOf(p.id);
+        return `<div class="rw"><div class="rh" onclick="ui.open=ui.open=='${p.id}'?'':'${p.id}';$('#lst').innerHTML=invList()"><div><b>${esc(p.name)}</b><div class="mu">${esc(p.cat)} · ${sp ? esc(sp.name) : "Sin proveedor"}</div></div>${gauge(p)}<div class="qt"><div class="${p.stock <= p.min ? "low" : ""}">${fq(p.stock, p.unit)}</div><span class="pl ${st[1]}">${st[0]}</span></div></div>${ui.open == p.id ? `<div class="rx"><input type="number" step="any" id="i${p.id}" placeholder="Cantidad" aria-label="Cantidad"><select id="u${p.id}" aria-label="Unidad">${uopts(p.unit)}</select><button class="btn s" onclick="setStock('${p.id}',1)">Fijar</button><button class="btn s" onclick="setStock('${p.id}',0)">Sumar</button><span class="mu">Mín. ${fq(p.min, p.unit)} · $${r2(p.cost)}/${esc(p.unit)}${p.pkq ? ` · ${esc(p.pkn || "presentación")} de ${fq(p.pkq, p.unit)}` : ""}</span><button class="btn s" onclick="editIng('${p.id}')">Editar</button><button class="btn x" onclick="ask('i${p.id}',()=>delIng('${p.id}'))">Eliminar</button></div>` : ""}</div>`;
+      };
       function invList() {
         const q = ui.q.toLowerCase(),
           l = S.ing
@@ -2847,23 +2916,24 @@
                 (a.stock / (a.min || 1) > 1) - (b.stock / (b.min || 1) > 1) ||
                 a.name.localeCompare(b.name),
             );
-        return (
-          l
-            .map((p) => {
-              const st =
-                  p.stock <= 0
-                    ? ["Agotado", "bd"]
-                    : p.stock <= p.min
-                      ? ["Bajo", "bd"]
-                      : p.stock <= p.min * 1.5
-                        ? ["Por acabarse", "wn"]
-                        : ["Bien", "ok"],
-                sp = supOf(p.id);
-              return `<div class="rw"><div class="rh" onclick="ui.open=ui.open=='${p.id}'?'':'${p.id}';$('#lst').innerHTML=invList()"><div><b>${esc(p.name)}</b><div class="mu">${esc(p.cat)} · ${sp ? esc(sp.name) : "Sin proveedor"}</div></div>${gauge(p)}<div class="qt"><div class="${p.stock <= p.min ? "low" : ""}">${fq(p.stock, p.unit)}</div><span class="pl ${st[1]}">${st[0]}</span></div></div>${ui.open == p.id ? `<div class="rx"><input type="number" step="any" id="i${p.id}" placeholder="Cantidad" aria-label="Cantidad"><select id="u${p.id}" aria-label="Unidad">${uopts(p.unit)}</select><button class="btn s" onclick="setStock('${p.id}',1)">Fijar</button><button class="btn s" onclick="setStock('${p.id}',0)">Sumar</button><span class="mu">Mín. ${fq(p.min, p.unit)} · $${r2(p.cost)}/${esc(p.unit)}${p.pkq ? ` · ${esc(p.pkn || "presentación")} de ${fq(p.pkq, p.unit)}` : ""}</span><button class="btn s" onclick="editIng('${p.id}')">Editar</button><button class="btn x" onclick="ask('i${p.id}',()=>delIng('${p.id}'))">Eliminar</button></div>` : ""}</div>`;
-            })
-            .join("") ||
-          `<div class="empty"><p>${S.ing.length ? "Nada coincide con tu búsqueda." : "Aún no hay ingredientes."}</p>${S.ing.length ? "" : `<button class="btn" onclick="ingModal()">Crear ingrediente</button>`}</div>`
-        );
+        if (!l.length)
+          return `<div class="cd"><div class="empty"><p>${S.ing.length ? "Nada coincide con tu búsqueda." : "Aún no hay ingredientes."}</p>${S.ing.length ? "" : `<button class="btn" onclick="ingModal()">Crear ingrediente</button>`}</div></div>`;
+        const g = {};
+        l.forEach((p) => (g[p.cat] = g[p.cat] || []).push(p));
+        return Object.keys(g)
+          .sort((a, b) => a.localeCompare(b))
+          .map((c) => {
+            const lw = g[c].filter((p) => p.stock <= p.min).length;
+            return secHtml(
+              c,
+              g[c].length,
+              q || ui.cat != "Todas" || !ui.ci[c],
+              "togInv",
+              g[c].map(rowHtml).join(""),
+              lw ? `<span class="pl bd">${lw} por reponer</span>` : "",
+            );
+          })
+          .join("");
       }
       function tour() {
         modal(
@@ -3235,6 +3305,112 @@
           t.style.setProperty("--my", e.clientY - r.top + "px");
         }
       });
+      const DEFP = [
+          "Bebidas calientes",
+          "Bebidas frías",
+          "Panadería",
+          "Postres",
+          "Sándwiches",
+          "Otros",
+        ],
+        nrm = (t) =>
+          String(t || "")
+            .toLowerCase()
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, ""),
+        pcats = () =>
+          [
+            ...new Set([...DEFP, ...S.prod.map((x) => x.cat).filter(Boolean)]),
+          ].sort();
+      const secHtml = (c, n, open, fn, inner, extra = "") =>
+        `<div class="cd sec ${open ? "" : "col"}"><button class="sh2" data-c="${esc(c)}" onclick="${fn}(this.dataset.c)">${esc(c)}<span class="chp">${n}</span>${extra}<i class="cv"></i></button><div class="sb">${inner}</div></div>`;
+      const tileHtml = (p) => {
+        const a = avail(p),
+          q = ui.cart[p.id] || 0;
+        return `<div class="tl ${a <= 0 ? "off" : ""} ${q ? "sel" : ""} ${ui.last == p.id ? "bump" : ""}" onclick="add('${p.id}',1)">${p.photo ? `<img src="${p.photo}" alt="">` : `<div class="ph">${esc((p.name || "?")[0].toUpperCase())}</div>`}<div class="tb"><b>${esc(p.name)}</b><span class="mu">${money(p.price)} · ${a <= 0 ? "sin stock" : "disp. " + a}</span></div>${q ? `<div class="qb"><button aria-label="Quitar uno" onclick="event.stopPropagation();add('${p.id}',-1)">−</button><span>${q}</span><button aria-label="Agregar uno">+</button></div>` : ""}</div>`;
+      };
+      const cardHtml = (p) =>
+        `<div class="pc">${p.photo ? `<img src="${p.photo}" alt="${esc(p.name)}">` : `<div class="ph">${esc((p.name || "?")[0].toUpperCase())}</div>`}<div class="tb"><h2 style="margin:0">${esc(p.name)}</h2><p class="pcp">${money(p.price)}</p><pre>${p.lines.map((l) => `${r2(l.qty)} ${esc(I(l.iid)?.unit || "")} ${esc(I(l.iid)?.name || "(eliminado)")}`).join("\n")}</pre>${p.steps ? `<pre>${esc(p.steps)}</pre>` : ""}<div class="pva"><button class="btn s" onclick="catModal('${p.id}')">Categoría</button><button class="btn x" onclick="ask('p${p.id}',()=>delProd('${p.id}'))">Eliminar</button></div></div></div>`;
+      function byCat(l) {
+        const g = {};
+        l.forEach((p) => {
+          const c = p.cat || "Otros";
+          (g[c] = g[c] || []).push(p);
+        });
+        return g;
+      }
+      function ventasList() {
+        const q = nrm(ui.vq),
+          g = byCat(S.prod.filter((p) => !q || nrm(p.name).includes(q))),
+          cats = Object.keys(g).sort((a, b) => a.localeCompare(b));
+        if (!cats.length)
+          return `<div class="empty"><p>${S.prod.length ? "Ningún producto coincide con “" + esc(ui.vq) + "”." : "Aún no tienes productos con receta."}</p>${S.prod.length ? "" : `<button class="btn" onclick="go('prod');prodModal()">Crear producto</button>`}</div>`;
+        return cats
+          .map((c) =>
+            secHtml(
+              c,
+              g[c].length,
+              q || !ui.cl[c],
+              "togSec",
+              `<div class="tg">${g[c].map(tileHtml).join("")}</div>`,
+            ),
+          )
+          .join("");
+      }
+      function prodList() {
+        const q = nrm(ui.pq),
+          g = byCat(S.prod.filter((p) => !q || nrm(p.name).includes(q))),
+          cats = Object.keys(g).sort((a, b) => a.localeCompare(b));
+        if (!cats.length)
+          return `<div class="empty"><p>${S.prod.length ? "Ningún producto coincide con “" + esc(ui.pq) + "”." : "Crea tu primer producto con su receta y foto."}</p>${S.prod.length ? "" : `<button class="btn" onclick="prodModal()">Crear producto</button>`}</div>`;
+        return cats
+          .map((c) =>
+            secHtml(
+              c,
+              g[c].length,
+              q || !ui.cp[c],
+              "togPro",
+              `<div class="pr">${g[c].map(cardHtml).join("")}</div>`,
+            ),
+          )
+          .join("");
+      }
+      function togSec(c) {
+        ui.cl[c] = !ui.cl[c];
+        $("#vl").innerHTML = ventasList();
+      }
+      function togInv(c) {
+        ui.ci[c] = !ui.ci[c];
+        $("#lst").innerHTML = invList();
+      }
+      function togPro(c) {
+        ui.cp[c] = !ui.cp[c];
+        $("#pl").innerHTML = prodList();
+      }
+      function vEnter() {
+        const q = nrm(ui.vq),
+          l = S.prod.filter((p) => q && nrm(p.name).includes(q));
+        if (l.length) {
+          ui.vq = "";
+          $("#vs").value = "";
+          add(l[0].id, 1);
+        }
+      }
+      function catModal(id) {
+        const p = PR(id),
+          cats = pcats();
+        modal(
+          "Categoría de " + esc(p.name),
+          `<div class="fm"><label class="w2">Categoría<select id="mc" onchange="$('#mcn').style.display=this.value=='__n'?'block':'none'">${cats.map((c) => `<option ${c == (p.cat || "Otros") ? "selected" : ""}>${esc(c)}</option>`).join("")}<option value="__n">Nueva categoría…</option></select><input id="mcn" placeholder="Nombre" style="display:none;margin-top:6px"></label></div><p style="margin-top:14px"><button class="btn" onclick="saveCat('${id}')">Guardar</button></p>`,
+        );
+      }
+      function saveCat(id) {
+        const v = $("#mc").value,
+          c = (v == "__n" ? $("#mcn").value.trim() : v) || "Otros";
+        put("prod", id, { ...C.prod[id], cat: c });
+        closeM();
+        toast("Categoría actualizada");
+      }
       function draw() {
         const T = Object.fromEntries(TABS.map((t) => [t[0], t]));
         $("#nv").innerHTML =
@@ -3294,7 +3470,10 @@
         const q = Math.max(0, (ui.cart[id] || 0) + n);
         q ? (ui.cart[id] = q) : delete ui.cart[id];
         ui.last = id;
-        draw();
+        if ($("#vl")) {
+          $("#vl").innerHTML = ventasList();
+          fab();
+        } else draw();
         setTimeout(() => (ui.last = ""), 80);
       }
       function commit() {
@@ -3449,7 +3628,14 @@
       function prodModal() {
         modal(
           "Nuevo producto",
-          `<div class="fm"><label>Nombre<input value="${esc(D.name)}" oninput="D.name=this.value"></label><label>Precio de venta (COP)<input type="number" step="any" value="${esc(D.price)}" oninput="D.price=this.value"></label><label class="w2">Foto<input type="file" accept="image/*" onchange="pickPhoto(this)"></label></div>${D.photo ? `<div class="pvw"><img id="pv" src="${D.photo}" alt=""></div>${IMG ? `<div class="fm"><label>Zoom<input type="range" min="1" max="3" step="0.01" value="${D.z}" oninput="D.z=+this.value;renderPhoto()"></label><label>Horizontal<input type="range" min="0" max="1" step="0.01" value="${D.x}" oninput="D.x=+this.value;renderPhoto()"></label><label class="w2">Vertical<input type="range" min="0" max="1" step="0.01" value="${D.y}" oninput="D.y=+this.value;renderPhoto()"></label></div>` : ""}` : ""}<h2 style="margin-top:16px">Receta por unidad vendida</h2>${S.ing.length ? `<div class="fm" style="grid-template-columns:2fr 1fr 1fr auto;align-items:end"><label>Ingrediente<select id="dl" onchange="$('#du').innerHTML=uopts(I(this.value).unit)">${S.ing.map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join("")}</select></label><label>Cantidad<input id="dq" type="number" step="any" min="0"></label><label>Unidad<select id="du">${uopts(S.ing[0].unit)}</select></label><button class="btn s" onclick="addLine()">Añadir</button></div>` : `<p class="mu">Primero crea ingredientes.</p>`}${D.lines.map((l, i) => `<div class="li"><span>${r2(l.qty)} ${esc(I(l.iid)?.unit)} · ${esc(I(l.iid)?.name)}</span><button class="btn x" onclick="D.lines.splice(${i},1);prodModal()">Quitar</button></div>`).join("")}<label class="mu" style="display:block;margin-top:10px">Preparación<textarea rows="3" oninput="D.steps=this.value">${esc(D.steps)}</textarea></label><p style="margin-top:14px"><button class="btn" onclick="addProd()">Guardar producto</button></p>`,
+          `<div class="fm"><label>Nombre<input value="${esc(D.name)}" oninput="D.name=this.value"></label><label>Precio de venta (COP)<input type="number" step="any" value="${esc(D.price)}" oninput="D.price=this.value"></label><label class="w2">Categoría<select onchange="D.cat=this.value;$('#dcn').style.display=this.value=='__n'?'block':'none'"><option value="">Elige…</option>${pcats()
+            .map(
+              (c) =>
+                `<option ${D.cat == c ? "selected" : ""}>${esc(c)}</option>`,
+            )
+            .join(
+              "",
+            )}<option value="__n" ${D.cat == "__n" ? "selected" : ""}>Nueva categoría…</option></select><input id="dcn" placeholder="Nombre de la categoría" value="${esc(D.catn)}" oninput="D.catn=this.value" style="display:${D.cat == "__n" ? "block" : "none"};margin-top:6px"></label><label class="w2">Foto<input type="file" accept="image/*" onchange="pickPhoto(this)"></label></div>${D.photo ? `<div class="pvw"><img id="pv" src="${D.photo}" alt=""></div>${IMG ? `<div class="fm"><label>Zoom<input type="range" min="1" max="3" step="0.01" value="${D.z}" oninput="D.z=+this.value;renderPhoto()"></label><label>Horizontal<input type="range" min="0" max="1" step="0.01" value="${D.x}" oninput="D.x=+this.value;renderPhoto()"></label><label class="w2">Vertical<input type="range" min="0" max="1" step="0.01" value="${D.y}" oninput="D.y=+this.value;renderPhoto()"></label></div>` : ""}` : ""}<h2 style="margin-top:16px">Receta por unidad vendida</h2>${S.ing.length ? `<div class="fm" style="grid-template-columns:2fr 1fr 1fr auto;align-items:end"><label>Ingrediente<select id="dl" onchange="$('#du').innerHTML=uopts(I(this.value).unit)">${S.ing.map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join("")}</select></label><label>Cantidad<input id="dq" type="number" step="any" min="0"></label><label>Unidad<select id="du">${uopts(S.ing[0].unit)}</select></label><button class="btn s" onclick="addLine()">Añadir</button></div>` : `<p class="mu">Primero crea ingredientes.</p>`}${D.lines.map((l, i) => `<div class="li"><span>${r2(l.qty)} ${esc(I(l.iid)?.unit)} · ${esc(I(l.iid)?.name)}</span><button class="btn x" onclick="D.lines.splice(${i},1);prodModal()">Quitar</button></div>`).join("")}<label class="mu" style="display:block;margin-top:10px">Preparación<textarea rows="3" oninput="D.steps=this.value">${esc(D.steps)}</textarea></label><p style="margin-top:14px"><button class="btn" onclick="addProd()">Guardar producto</button></p>`,
         );
       }
       function addLine() {
@@ -3470,9 +3656,18 @@
           price: num(D.price),
           photo: D.photo,
           steps: D.steps,
+          cat: (D.cat == "__n" ? D.catn.trim() : D.cat) || "Otros",
           lines: D.lines,
         });
-        D = { name: "", price: "", steps: "", photo: "", lines: [] };
+        D = {
+          name: "",
+          price: "",
+          steps: "",
+          photo: "",
+          cat: "",
+          catn: "",
+          lines: [],
+        };
         IMG = null;
         closeM();
         toast("Producto guardado");
@@ -3903,6 +4098,7 @@
             {
               id: uid(),
               name: "Espresso",
+              cat: "Bebidas calientes",
               price: 4500,
               photo: "",
               steps: "Extraer 30 ml en unos 28 segundos.",
@@ -3911,6 +4107,7 @@
             {
               id: uid(),
               name: "Latte",
+              cat: "Bebidas calientes",
               price: 8500,
               photo: "",
               steps: "Espresso doble y leche vaporizada.",
@@ -3924,6 +4121,7 @@
             {
               id: uid(),
               name: "Sándwich",
+              cat: "Sándwiches",
               price: 12000,
               photo: "",
               steps: "Pan, jamón y queso a la plancha.",
@@ -3970,6 +4168,7 @@
         prod.forEach((p) =>
           put("prod", p.id, {
             name: p.name,
+            cat: p.cat,
             price: p.price,
             photo: "",
             steps: p.steps,
