@@ -9,4 +9,4 @@ const FIREBASE_CONFIG = {
 };
 
 const STANDALONE = true,
-  BKC = ["ing", "prod", "led", "prov", "cal"];
+  BKC = ["ing", "prod", "led", "prov", "cal", "hor"];
