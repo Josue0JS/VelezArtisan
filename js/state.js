@@ -43,6 +43,11 @@ const TABS = [
     "<svg viewBox='0 0 24 24' aria-hidden='true'><path d='M3 6h11v10H3zM14 10h4l3 3v3h-7'/><circle cx='7' cy='18' r='1.8'/><circle cx='17' cy='18' r='1.8'/></svg>",
   ],
   [
+    "hor",
+    "Horarios",
+    "<svg viewBox='0 0 24 24' aria-hidden='true'><rect x='3' y='5' width='18' height='16' rx='2'/><path d='M3 10h18M8 3v4M16 3v4M8 14h2M14 14h2M8 18h2'/></svg>",
+  ],
+  [
     "ayuda",
     "Ayuda",
     "<svg viewBox='0 0 24 24' aria-hidden='true'><circle cx='12' cy='12' r='9'/><path d='M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 1-1 1.7M12 17h.01'/></svg>",
@@ -54,7 +59,7 @@ const MOT = ["Caducado", "Dañado", "Error de preparación", "Derrame", "Otro"];
 let S = { ing: [], prod: [], prov: [], sales: [], waste: [], recv: [], cal: [], cfg: {} },
   D = { name: "", price: "", steps: "", photo: "", cat: "", catn: "", lines: [] };
 
-const C = { ing: {}, prod: {}, led: {}, prov: {}, cfg: {}, cal: {} },
+const C = { ing: {}, prod: {}, led: {}, prov: {}, cfg: {}, cal: {}, hor: {} },
   LK = "cafe3";
 let DB = null,
   UID = "u",
