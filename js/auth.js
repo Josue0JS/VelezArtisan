@@ -25,6 +25,7 @@ function lmsg(m) {
 async function init() {
   if (!window.firebase || /PEGA_AQUI|TU-PROYECTO/.test(JSON.stringify(FIREBASE_CONFIG))) {
     $("#lg").className = "on";
+    lmsg("Falta configurar Firebase: abre index.html y pega tu configuración (paso 4 de la guía).");
     $("#lb").disabled = true;
     return;
   }
@@ -45,7 +46,7 @@ async function init() {
     $("#lg").className = "";
     SYNC = "Conectando…";
     draw();
-    ["ing", "prod", "led", "prov", "cfg", "cal"].forEach((c) =>
+    ["ing", "prod", "led", "prov", "cfg", "cal", "hor"].forEach((c) =>
       UNSUB.push(
         DB.collection(c).onSnapshot(
           (sn) => {
