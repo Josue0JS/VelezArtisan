@@ -33,6 +33,13 @@ async function init() {
   AUTH = firebase.auth();
   DB = firebase.firestore();
   UID = devId();
+  // IndexedDB cache: keeps recently used Firestore data available offline.
+  try {
+    await DB.enablePersistence({ synchronizeTabs: true });
+  } catch (e) {
+    // Persistence may be unavailable (private mode, unsupported browser or old tab).
+    console.info("Firestore persistence unavailable; continuing online:", e && e.code);
+  }
   AUTH.onAuthStateChanged((u) => {
     UNSUB.forEach((f) => f());
     UNSUB = [];
@@ -50,11 +57,16 @@ async function init() {
       UNSUB.push(
         DB.collection(c).onSnapshot(
           (sn) => {
-            C[c] = {};
-            sn.docs.forEach((d) => (C[c][d.id] = d.data()));
+            // Apply only changed documents instead of rebuilding the collection map
+            // from every document on each realtime update.
+            sn.docChanges().forEach((change) => {
+              const id = change.doc.id;
+              if (change.type === "removed") delete C[c][id];
+              else C[c][id] = change.doc.data();
+            });
             READY = true;
             SYNC = "";
-            rebuild();
+            scheduleRebuild();
           },
           (e) => {
             SYNC = "Sin conexión con la base de datos";

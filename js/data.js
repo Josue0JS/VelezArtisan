@@ -23,14 +23,14 @@ function put(c, id, d) {
   C[c][id] = d;
   if (DB) WQ = WQ.then(() => DB.doc(c + "/" + id).set(d)).catch(fail);
   else lsave();
-  rebuild();
+  scheduleRebuild();
 }
 
 function rm(c, id) {
   delete C[c][id];
   if (DB) WQ = WQ.then(() => DB.doc(c + "/" + id).delete()).catch(fail);
   else lsave();
-  rebuild();
+  scheduleRebuild();
 }
 
 function emit(date, evs) {
@@ -44,7 +44,19 @@ function emit(date, evs) {
       { merge: true },
     ),
   ).catch(fail);
-  rebuild();
+  scheduleRebuild();
+}
+
+let rebuildQueued = false;
+function scheduleRebuild() {
+  if (rebuildQueued) return;
+  rebuildQueued = true;
+  const flush = () => {
+    rebuildQueued = false;
+    rebuild();
+  };
+  if (typeof requestAnimationFrame === "function") requestAnimationFrame(flush);
+  else setTimeout(flush, 0);
 }
 
 function rebuild() {

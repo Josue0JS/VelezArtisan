@@ -429,11 +429,11 @@ const secHtml = (c, n, open, fn, inner, extra = "") =>
 const tileHtml = (p) => {
   const a = avail(p),
     q = ui.cart[p.id] || 0;
-  return `<div class="tl ${a <= 0 ? "off" : ""} ${q ? "sel" : ""} ${ui.last == p.id ? "bump" : ""}" onclick="add('${p.id}',1)">${p.photo ? `<img src="${p.photo}" alt="">` : `<div class="ph">${esc((p.name || "?")[0].toUpperCase())}</div>`}<div class="tb"><b>${esc(p.name)}</b><span class="mu">${money(p.price)} · ${a <= 0 ? "sin stock" : "disp. " + a}</span></div>${q ? `<div class="qb"><button aria-label="Quitar uno" onclick="event.stopPropagation();add('${p.id}',-1)">−</button><span>${q}</span><button aria-label="Agregar uno">+</button></div>` : ""}</div>`;
+  return `<div class="tl ${a <= 0 ? "off" : ""} ${q ? "sel" : ""} ${ui.last == p.id ? "bump" : ""}" onclick="add('${p.id}',1)">${p.photo ? `<img src="${p.photo}" alt="" loading="lazy" decoding="async">` : `<div class="ph">${esc((p.name || "?")[0].toUpperCase())}</div>`}<div class="tb"><b>${esc(p.name)}</b><span class="mu">${money(p.price)} · ${a <= 0 ? "sin stock" : "disp. " + a}</span></div>${q ? `<div class="qb"><button aria-label="Quitar uno" onclick="event.stopPropagation();add('${p.id}',-1)">−</button><span>${q}</span><button aria-label="Agregar uno">+</button></div>` : ""}</div>`;
 };
 
 const cardHtml = (p) =>
-  `<div class="pc">${p.photo ? `<img src="${p.photo}" alt="${esc(p.name)}">` : `<div class="ph">${esc((p.name || "?")[0].toUpperCase())}</div>`}<div class="tb"><h2 style="margin:0">${esc(p.name)}</h2><p class="pcp">${money(p.price)}</p><pre>${p.lines.map((l) => `${r2(l.qty)} ${esc(I(l.iid)?.unit || "")} ${esc(I(l.iid)?.name || "(eliminado)")}`).join("\n")}</pre>${p.steps ? `<pre>${esc(p.steps)}</pre>` : ""}<div class="pva"><button class="btn s" onclick="catModal('${p.id}')">Categoría</button><button class="btn x" onclick="ask('p${p.id}',()=>delProd('${p.id}'))">Eliminar</button></div></div></div>`;
+  `<div class="pc">${p.photo ? `<img src="${p.photo}" alt="${esc(p.name)}" loading="lazy" decoding="async">` : `<div class="ph">${esc((p.name || "?")[0].toUpperCase())}</div>`}<div class="tb"><h2 style="margin:0">${esc(p.name)}</h2><p class="pcp">${money(p.price)}</p><pre>${p.lines.map((l) => `${r2(l.qty)} ${esc(I(l.iid)?.unit || "")} ${esc(I(l.iid)?.name || "(eliminado)")}`).join("\n")}</pre>${p.steps ? `<pre>${esc(p.steps)}</pre>` : ""}<div class="pva"><button class="btn s" onclick="catModal('${p.id}')">Categoría</button><button class="btn x" onclick="ask('p${p.id}',()=>delProd('${p.id}'))">Eliminar</button></div></div></div>`;
 
 function byCat(l) {
   const g = {};
@@ -483,6 +483,14 @@ function prodList() {
 }
 
 function draw() {
+  if (ui.tab === "hor" && typeof V.hor !== "function") {
+    $("#m").innerHTML = '<div class="sk"></div><div class="sk"></div><div class="sk s"></div>';
+    loadHorarios()
+      .then(() => { if (ui.tab === "hor") draw(); })
+      .catch(() => {
+        $("#m").innerHTML = '<div class="bn">No se pudo cargar la sección de Horarios. Comprueba tu conexión y vuelve a entrar.</div>';
+      });
+  }
   const T = Object.fromEntries(TABS.map((t) => [t[0], t]));
   $("#nv").innerHTML =
     `<div class="br">ARTISAN<br>CAFÉ</div>` +
@@ -501,11 +509,14 @@ function draw() {
     "beforeend",
     `<div class="sy">${esc(SYNC || "Sincronizado")}</div><button class="lo" onclick="logout()">Cerrar sesión</button>`,
   );
+  const page = V[ui.tab];
   $("#m").innerHTML = READY
     ? (CANW
         ? ""
         : `<div class="bn">Modo solo lectura: pide que te den permiso de Colaborador para registrar datos.</div>`) +
-      V[ui.tab]()
+      (typeof page === "function"
+        ? page()
+        : `<div class="sk"></div><div class="sk"></div><div class="sk s"></div>`)
     : `<div class="sk"></div><div class="sk"></div><div class="sk s"></div>`;
   if (READY && !ui.first) {
     ui.first = 1;

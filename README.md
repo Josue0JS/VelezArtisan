@@ -33,20 +33,23 @@ artisan-cafe/
     ├── proveedores.js    acciones de Proveedores
     ├── recepciones.js    acciones de Recepciones (insumos que llegan)
     ├── pedidos.js        acciones de Pedidos
+    ├── horarios.js      lógica de Horarios (carga diferida)
     └── main.js           arranque
 ```
 
 ## Cómo se conectan
 
-1. `index.html` carga los estilos de `css/` y luego los scripts de `js/` **en el orden indicado**.
-2. Los scripts comparten las mismas variables y funciones: `state.js` guarda los datos,
+1. `index.html` carga los estilos principales y los scripts de `js/` **en el orden indicado**. Los estilos y la lógica de Horarios se descargan solo al abrir esa sección.
+2. Firestore utiliza caché persistente local (IndexedDB) cuando el navegador lo permite, para mejorar la reutilización de datos y el trabajo sin conexión.
+3. Las actualizaciones en tiempo real aplican solo los documentos modificados y agrupan reconstrucciones de estado dentro del mismo frame.
+4. Los scripts comparten las mismas variables y funciones: `state.js` guarda los datos,
    `data.js` los escribe en la base, `views.js` los dibuja, y los archivos de acciones
    (`ventas.js`, `inventario.js`, …) responden a los botones de cada pantalla.
-3. `auth.js` pide el correo y la clave; al entrar, se conecta a Firebase y todo se actualiza en vivo.
-4. `main.js` va al final porque dibuja la aplicación cuando ya cargó todo lo demás.
+5. `auth.js` pide el correo y la clave; al entrar, se conecta a Firebase y todo se actualiza en vivo.
+6. `main.js` va al final porque dibuja la aplicación cuando ya cargó todo lo demás.
 
 > Si agregas un archivo nuevo de `js/`, añade su línea `<script src="js/…">` en `index.html`
-> **antes** de `main.js`.
+> **antes** de `main.js`. `horarios.js` es la excepción: se solicita desde `main.js` al abrir esa sección.
 
 ## Cómo publicarlo
 

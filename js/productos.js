@@ -90,11 +90,16 @@ function pickPhoto(el) {
     u = URL.createObjectURL(f);
   im.onload = () => {
     IMG = im;
+    URL.revokeObjectURL(u);
     D.z = 1;
     D.x = 0.5;
     D.y = 0.5;
     renderPhoto();
     prodModal();
+  };
+  im.onerror = () => {
+    URL.revokeObjectURL(u);
+    toast("No se pudo cargar esa imagen");
   };
   im.src = u;
 }
