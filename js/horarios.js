@@ -130,10 +130,38 @@ const hwRuns = (hs) => {
 };
 
 /* ---------- Lectura de las novedades escritas ---------- */
-const HDW = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"];
+const HDW = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"],
+  HTYPE = { d: "descanso", v: "vacaciones", i: "incapacidad" }, //  d = negro, v = azul claro, i = verde
+  HART = { d: "el", v: "las", i: "la" },
+  HRANK = { d: 1, v: 2, i: 3 };
 
+const hwLev = (a, b) => {
+  if (Math.abs(a.length - b.length) > 1) return 2;
+  const dp = Array.from({ length: a.length + 1 }, (_, i) => [i]);
+  for (let j = 1; j <= b.length; j++) dp[0][j] = j;
+  for (let i = 1; i <= a.length; i++)
+    for (let j = 1; j <= b.length; j++)
+      dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + (a[i - 1] == b[j - 1] ? 0 : 1));
+  return dp[a.length][b.length];
+};
+
+/* "lunes a miércoles", "martes y jueves", "toda la semana" */
+function hwDayTxt(ds) {
+  if (ds.length >= 7) return "toda la semana";
+  ds = [...ds].sort((a, b) => a - b);
+  const runs = [];
+  ds.forEach((d) => {
+    const l = runs[runs.length - 1];
+    if (l && l[1] == d - 1) l[1] = d;
+    else runs.push([d, d]);
+  });
+  const parts = runs.map(([a, b]) => (a == b ? HDL[a] : b - a >= 2 ? HDL[a] + " a " + HDL[b] : HDL[a] + " y " + HDL[b]));
+  return parts.length > 1 ? parts.slice(0, -1).join(", ") + " y " + parts[parts.length - 1] : parts[0] || "";
+}
+
+/* Días que menciona un texto: lunes, "del lunes al miércoles", "hasta el jueves", "desde el viernes", "el 12", "fin de semana" */
 function hwDays(t, dates) {
-  if (/toda la semana|todos los dias/.test(t)) return [0, 1, 2, 3, 4, 5, 6];
+  if (/toda la semana|todos los dias|semana completa/.test(t)) return [0, 1, 2, 3, 4, 5, 6];
   if (/entre semana/.test(t)) return [0, 1, 2, 3, 4];
   if (/fin(es)? de semana/.test(t)) return [5, 6];
   const re = /\b(lunes|martes|miercoles|jueves|viernes|sabados?|domingos?)\b/g,
@@ -142,11 +170,14 @@ function hwDays(t, dates) {
   let m;
   while ((m = re.exec(t))) ms.push({ d: HDW.findIndex((x) => m[1].startsWith(x)), i: m.index, e: re.lastIndex });
   for (let k = 0; k < ms.length; k++) {
-    const n = ms[k + 1];
+    const n = ms[k + 1],
+      pre = t.slice(Math.max(0, ms[k].i - 14), ms[k].i);
     if (n && /^\s*(al|a|hasta( el)?|-)\s*$/.test(t.slice(ms[k].e, n.i)) && ms[k].d <= n.d) {
       for (let d = ms[k].d; d <= n.d; d++) out.push(d);
       k++;
-    } else out.push(ms[k].d);
+    } else if (/hasta (el )?$/.test(pre)) for (let d = 0; d <= ms[k].d; d++) out.push(d);
+    else if (/desde (el )?$/.test(pre)) for (let d = ms[k].d; d <= 6; d++) out.push(d);
+    else out.push(ms[k].d);
   }
   const dr = /\bel (\d{1,2})\b(?!\s*(:|h\b|am|pm|a las))/g;
   while ((m = dr.exec(t))) {
@@ -164,14 +195,34 @@ function hwHour(h, ap) {
   return h;
 }
 
+/* Personas nombradas (tolera una letra de error), agrupadas cuando van juntas: "Cesar y Gabriel" */
+function hwGroups(t, names, team) {
+  const men = [],
+    re = /[a-z]+/g;
+  let m;
+  while ((m = re.exec(t))) {
+    const w = m[0];
+    for (const x of names)
+      if (w == x.k || (x.k.length >= 5 && w.length >= 4 && !HDW.includes(w) && hwLev(w, x.k) <= 1)) {
+        men.push({ p: x.p, i: m.index, e: re.lastIndex });
+        break;
+      }
+  }
+  const all = /\b(todos|todo el equipo|todo el personal)\b/.exec(t);
+  if (all) return [{ ps: team.slice(), start: all.index, end: all.index + all[0].length }];
+  const groups = [];
+  men.forEach((x) => {
+    const g = groups[groups.length - 1];
+    if (g && /^[\s,]*(y|e)?[\s,]*$/.test(t.slice(g.end, x.i))) {
+      if (!g.ps.includes(x.p)) g.ps.push(x.p);
+      g.end = x.e;
+    } else groups.push({ ps: [x.p], start: x.i, end: x.e });
+  });
+  return groups;
+}
+
 function hwParse(text, team, dates) {
-  const R = {
-      cons: {},
-      boost: [0, 0, 0, 0, 0, 0, 0],
-      pref: {},
-      ok: [],
-      unk: [],
-    },
+  const R = { cons: {}, boost: [0, 0, 0, 0, 0, 0, 0], pref: {}, ok: [], unk: [], warn: [] },
     names = team.map((p) => ({ p, k: nrm(p.name).split(/\s+/)[0] }));
   team.forEach((p) => (R.cons[p.id] = Array.from({ length: 7 }, () => ({}))));
   const TM = "(\\d{1,2})(?::(\\d{2}))?\\s*(am|pm)?",
@@ -180,7 +231,37 @@ function hwParse(text, team, dates) {
     reEE = new RegExp("(?:sale|salida|termina|se va|finaliza)\\s*(?:a las|a la|a|las)?\\s*" + TM),
     reSM = new RegExp("(?:desde las|despues de las|luego de las)\\s*" + TM),
     reEM = new RegExp("(?:hasta las|antes de las)\\s*" + TM),
-    tv = (m, o) => hwHour(m[o], m[o + 2]) + (m[o + 1] ? +m[o + 1] / 60 : 0);
+    tv = (m, o) => hwHour(m[o], m[o + 2]) + (m[o + 1] ? +m[o + 1] / 60 : 0),
+    clean = (s) => s.replace(/\bel \d{1,2}\b(?!\s*(:|h\b|am|pm|a las))/g, " ");
+
+  /* Qué dice un texto sobre una persona: tipo de ausencia, horas, abrir/cerrar */
+  const act = (t) => {
+    const A = { any: false, type: null, pref: false, fixed: null, startEq: null, endEq: null, startMin: null, endMax: null };
+    let m;
+    const mr = reRange.exec(t);
+    if (mr) {
+      const a = tv(mr, 1),
+        b = tv(mr, 4);
+      if (b > a && b <= 24) {
+        A.fixed = [a, b];
+        t = t.replace(mr[0], " ");
+      }
+    }
+    if ((m = reSE.exec(t))) A.startEq = tv(m, 1);
+    if ((m = reEE.exec(t))) A.endEq = tv(m, 1);
+    if ((m = reSM.exec(t))) A.startMin = tv(m, 1);
+    if ((m = reEM.exec(t))) A.endMax = tv(m, 1);
+    A.noClose = /\bno (puede |podra |va a |debe |quiere )?(cerrar|cierre|cierra)\b/.test(t);
+    A.noOpen = /\bno (puede |podra |va a |debe |quiere )?(abrir|apertura|abre)\b/.test(t);
+    A.open = !A.noOpen && /\b(abre|abrir|apertura|turno de (la )?manana|en la manana|temprano)\b/.test(t);
+    A.close = !A.noClose && /\b(cierra|cerrar|cierre|turno de (la )?tarde|en la tarde|en la noche)\b/.test(t);
+    if (/\b(incapacidad\w*|incapacitad\w*|enferm\w*|cita medica|reposo|hospital\w*|urgencias)\b/.test(t)) A.type = "i";
+    else if (/\b(vacacion\w*|vacas)\b/.test(t)) A.type = "v";
+    else if (/\b(descans\w*|libre|permiso|licencia|calamidad|falta|no (trabaja|viene|asiste|labora)|no puede (venir|trabajar|asistir)|ausente|compensatorio)\b/.test(t)) A.type = "d";
+    A.pref = /\b(prefiere|quiere|quisiera|le gustaria|pidio|solicito|solicita|pide)\b/.test(t);
+    A.any = !!(A.type || A.fixed || A.startEq != null || A.endEq != null || A.startMin != null || A.endMax != null || A.noClose || A.noOpen || A.open || A.close);
+    return A;
+  };
 
   const sents = String(text || "")
     .split(/\n|;|\.(?=\s|$)/)
@@ -188,114 +269,106 @@ function hwParse(text, team, dates) {
     .filter(Boolean);
 
   for (const raw of sents) {
-    let t = " " + nrm(raw) + " ";
-    const days = hwDays(t, dates);
-    t = t.replace(/\bel \d{1,2}\b(?!\s*(:|h\b|am|pm|a las))/g, " ");
-    let ps = names.filter((x) => new RegExp("\\b" + x.k + "\\b").test(t)).map((x) => x.p);
-    if (/\b(todos|todo el equipo|todo el personal)\b/.test(t)) ps = team.slice();
+    const t = " " + nrm(raw) + " ",
+      all = hwDays(t, dates);
     let handled = false;
 
     /* Día fuerte o flojo (no necesita nombre) */
-    if (days.length && /\b(refuerzo|evento|reserva|grupo grande|dia fuerte|mas gente|mas personal|alta demanda|promocion|lleno)\b/.test(t)) {
-      days.forEach((d) => R.boost[d]++);
-      R.ok.push("Más gente en horas pico: " + days.map((d) => HDL[d]).join(", "));
+    if (all.length && /\b(refuerzo|evento|reserva|grupo grande|dia fuerte|mas gente|mas personal|alta demanda|promocion|lleno)\b/.test(t)) {
+      all.forEach((d) => R.boost[d]++);
+      R.ok.push({ t: "e", s: "Más gente en horas pico: " + hwDayTxt(all) });
       handled = true;
-    } else if (days.length && /\b(poco movimiento|dia flojo|baja demanda|menos gente)\b/.test(t)) {
-      days.forEach((d) => R.boost[d]--);
-      R.ok.push("Menos gente en horas pico: " + days.map((d) => HDL[d]).join(", "));
+    } else if (all.length && /\b(poco movimiento|dia flojo|baja demanda|menos gente)\b/.test(t)) {
+      all.forEach((d) => R.boost[d]--);
+      R.ok.push({ t: "e", s: "Menos gente en horas pico: " + hwDayTxt(all) });
       handled = true;
     }
-    if (!ps.length) {
-      if (!handled) R.unk.push(raw);
+
+    const groups = hwGroups(t, names, team);
+    if (!groups.length) {
+      if (!handled) R.unk.push({ s: raw, why: act(clean(t)).any ? "No encontré el nombre de la persona" : "No la entendí" });
       continue;
     }
 
-    /* Horas escritas */
-    let fixed = null,
-      startEq = null,
-      endEq = null,
-      startMin = null,
-      endMax = null;
-    const mr = reRange.exec(t);
-    if (mr) {
-      const a = tv(mr, 1),
-        b = tv(mr, 4);
-      if (b > a && b <= 24) {
-        fixed = [a, b];
-        t = t.replace(mr[0], " ");
+    /* Una cláusula por persona o grupo: "Cesar descansa el martes y Gabriel el jueves" */
+    const prefix = t.slice(0, groups[0].start),
+      pDays = hwDays(prefix, dates);
+    let prevType = null,
+      got = false;
+    groups.forEach((g, gi) => {
+      const ct = t.slice(g.start, gi + 1 < groups.length ? groups[gi + 1].start : t.length);
+      let days = hwDays(ct, dates);
+      if (!days.length) days = pDays;
+      let a = act(clean(ct));
+      if (!a.any) a = act(clean(prefix));
+      if (!a.any && prevType && days.length) a = { any: true, type: prevType, pref: false, fixed: null, startEq: null, endEq: null, startMin: null, endMax: null };
+      if (!a.any) return;
+      const needDays = a.type || a.fixed || a.startEq != null || a.endEq != null;
+      if (needDays && !days.length) {
+        R.unk.push({ s: raw, why: "Falta el día (por ejemplo: el martes)" });
+        got = true;
+        return;
       }
-    }
-    let m;
-    if ((m = reSE.exec(t))) startEq = tv(m, 1);
-    if ((m = reEE.exec(t))) endEq = tv(m, 1);
-    if ((m = reSM.exec(t))) startMin = tv(m, 1);
-    if ((m = reEM.exec(t))) endMax = tv(m, 1);
-
-    const noClose = /\bno (puede |podra |va a |debe |quiere )?(cerrar|cierre|cierra)\b/.test(t),
-      noOpen = /\bno (puede |podra |va a |debe |quiere )?(abrir|apertura|abre)\b/.test(t),
-      open = !noOpen && /\b(abre|abrir|apertura|turno de (la )?manana|en la manana|temprano)\b/.test(t),
-      close = !noClose && /\b(cierra|cerrar|cierre|turno de (la )?tarde|en la tarde|en la noche)\b/.test(t),
-      off = /\b(descans\w*|libre|incapacidad|incapacitad\w*|vacacion\w*|permiso|licencia|no (trabaja|viene|asiste|labora)|no puede (venir|trabajar|asistir)|falta|cita medica|calamidad|enferm\w*|ausente|compensatorio)\b/.test(t),
-      pref = /\b(prefiere|quiere|quisiera|le gustaria|pidio|solicito|solicita|pide)\b/.test(t);
-
-    const acts = [];
-    const needDays = off || fixed || startEq != null || endEq != null,
-      useDays = days.length ? days : needDays ? [] : [0, 1, 2, 3, 4, 5, 6];
-    if (needDays && !days.length) {
-      R.unk.push(raw);
-      continue;
-    }
-    for (const p of ps) {
-      const c = R.cons[p.id],
-        nm = p.name.split(" ")[0],
-        dl = days.length && days.length < 7 ? " " + days.map((d) => HDL[d]).join(", ") : days.length ? " toda la semana" : "";
-      if (off && pref) {
-        R.pref[p.id] = useDays[0];
-        acts.push(nm + ": prefiere descansar el " + HDL[useDays[0]] + (useDays[0] == 6 ? " (si el domingo trabaja todo el equipo, no se puede)" : ""));
-      } else if (off) {
-        useDays.forEach((d) => (c[d].off = true));
-        acts.push(nm + ": no trabaja" + dl);
+      const ud = days.length ? days : [0, 1, 2, 3, 4, 5, 6],
+        dtx = days.length ? " " + hwDayTxt(days) : "";
+      for (const p of g.ps) {
+        const c = R.cons[p.id],
+          nm = p.name.split(" ")[0],
+          add = (t2, s) => R.ok.push({ t: t2, s: nm + ": " + s });
+        if (a.type == "d" && a.pref) {
+          R.pref[p.id] = ud[0];
+          add("d", "prefiere descansar el " + HDL[ud[0]] + (ud[0] == 6 ? " (si el domingo trabaja todo el equipo, no se puede)" : ""));
+        } else if (a.type) {
+          ud.forEach((d) => {
+            if (!c[d].off || HRANK[a.type] > HRANK[c[d].off]) c[d].off = a.type;
+          });
+          add(a.type, HTYPE[a.type] + dtx);
+        }
+        if (a.fixed) {
+          ud.forEach((d) => (c[d].fixed = a.fixed));
+          add("h", "de " + hwFmt(a.fixed[0]) + " a " + hwFmt(a.fixed[1]) + dtx);
+        }
+        if (a.startEq != null) {
+          ud.forEach((d) => (c[d].startEq = a.startEq));
+          add("h", "entra a las " + hwFmt(a.startEq) + dtx);
+        }
+        if (a.endEq != null) {
+          ud.forEach((d) => (c[d].endEq = a.endEq));
+          add("h", "sale a las " + hwFmt(a.endEq) + dtx);
+        }
+        if (a.startMin != null) {
+          ud.forEach((d) => (c[d].startMin = a.startMin));
+          add("h", "entra desde las " + hwFmt(a.startMin) + dtx);
+        }
+        if (a.endMax != null) {
+          ud.forEach((d) => (c[d].endMax = a.endMax));
+          add("h", "sale hasta las " + hwFmt(a.endMax) + dtx);
+        }
+        [
+          ["noClose", "no cierra"],
+          ["noOpen", "no abre"],
+          ["open", "abre"],
+          ["close", "cierra"],
+        ].forEach(([k, l]) => {
+          if (a[k]) {
+            ud.forEach((d) => (c[d][k] = true));
+            add("h", l + dtx);
+          }
+        });
       }
-      if (fixed) {
-        useDays.forEach((d) => (c[d].fixed = fixed));
-        acts.push(nm + ": de " + hwFmt(fixed[0]) + " a " + hwFmt(fixed[1]) + dl);
-      }
-      if (startEq != null) {
-        useDays.forEach((d) => (c[d].startEq = startEq));
-        acts.push(nm + ": entra a las " + hwFmt(startEq) + dl);
-      }
-      if (endEq != null) {
-        useDays.forEach((d) => (c[d].endEq = endEq));
-        acts.push(nm + ": sale a las " + hwFmt(endEq) + dl);
-      }
-      if (startMin != null) {
-        useDays.forEach((d) => (c[d].startMin = startMin));
-        acts.push(nm + ": entra desde las " + hwFmt(startMin) + dl);
-      }
-      if (endMax != null) {
-        useDays.forEach((d) => (c[d].endMax = endMax));
-        acts.push(nm + ": sale hasta las " + hwFmt(endMax) + dl);
-      }
-      if (noClose) {
-        useDays.forEach((d) => (c[d].noClose = true));
-        acts.push(nm + ": no cierra" + dl);
-      }
-      if (noOpen) {
-        useDays.forEach((d) => (c[d].noOpen = true));
-        acts.push(nm + ": no abre" + dl);
-      }
-      if (open) {
-        useDays.forEach((d) => (c[d].open = true));
-        acts.push(nm + ": abre" + dl);
-      }
-      if (close) {
-        useDays.forEach((d) => (c[d].close = true));
-        acts.push(nm + ": cierra" + dl);
-      }
-    }
-    if (acts.length) R.ok.push(...acts);
-    else if (!handled) R.unk.push(raw);
+      prevType = a.type || prevType;
+      got = true;
+    });
+    if (!got && !handled) R.unk.push({ s: raw, why: "Vi el nombre pero no entendí qué cambia (descanso, vacaciones, incapacidad, una hora…)" });
   }
+
+  /* Choques: ausencia y hora el mismo día */
+  team.forEach((p) =>
+    R.cons[p.id].forEach((c, d) => {
+      if (c.off && (c.fixed || c.startEq != null || c.endEq != null || c.startMin != null || c.endMax != null || c.open || c.close))
+        R.warn.push(p.name.split(" ")[0] + ": el " + HDL[d] + " tiene " + HTYPE[c.off] + " y también una hora; se respeta " + HART[c.off] + " " + HTYPE[c.off]);
+    }),
+  );
   return R;
 }
 
@@ -322,6 +395,7 @@ function hwCheck(cells, boost, cfg, dates) {
       if (!on.some((p) => p.sk.includes("bar"))) add("sin nadie en barismo");
     }
     for (const m in iss) W.push(hwCap(HDL[d]) + " " + hwRuns(iss[m]) + ": " + m);
+    if (!team.some((p, k) => sh[k] && p.lid)) W.push(hwCap(HDL[d]) + ": no hay ningún líder programado");
     if (at(D.e).length < +rl.minApert)
       W.push(hwCap(HDL[d]) + " " + D.e + ":00–" + D.i + ":00 (preparación): menos de " + rl.minApert + " personas");
     if (at(D.c).length < +rl.minCierre)
@@ -576,8 +650,9 @@ function hwGen(seed) {
       bestA = A.map((row) => row.slice());
     }
   }
-  const out = {};
-  team.forEach((p, k) => (out[p.id] = bestA[k].map((x) => (x ? x[0] + "-" + x[1] : ""))));
+  const out = {},
+    off = (p, d) => ({ v: "V", i: "I" })[P.cons[p.id][d].off] || "";
+  team.forEach((p, k) => (out[p.id] = bestA[k].map((x, d) => (x ? x[0] + "-" + x[1] : off(p, d)))));
   return {
     start,
     cells: out,
@@ -585,7 +660,7 @@ function hwGen(seed) {
     boost: P.boost,
     ok: P.ok,
     unk: P.unk,
-    pre: warns,
+    pre: [...P.warn, ...warns],
     t: Date.now(),
   };
 }
@@ -623,6 +698,15 @@ function hwWarnHtml() {
     : `<p class="mu">Sin avisos: cada hora tiene gente suficiente, caja y barismo cubiertos.</p>`;
 }
 
+/* Cómo se ve cada celda: turno (verde), descanso (negro), vacaciones (azul claro), incapacidad (verde semi claro) */
+const hwCV = (c) => {
+  const s = hwSh(c);
+  if (s) return { cls: "hz-on", i: hwFmt(s[0]), o: hwFmt(s[1]), h: s[1] - s[0] };
+  if (c === "V") return { cls: "hz-vac", i: "VAC", o: "", h: 0 };
+  if (c === "I") return { cls: "hz-inc", i: "INC", o: "", h: 0 };
+  return { cls: "hz-off", i: "", o: "", h: 0 };
+};
+
 function hwTable(doc, cfg) {
   const team = cfg.team,
     dates = [...Array(7)].map((_, i) => addD(doc.start, i)),
@@ -639,14 +723,27 @@ function hwTable(doc, cfg) {
         t = hwTot(cfg, row);
       return `<tr><th class="hz-nm">${esc(p.name)}</th>${row
         .map((c, d) => {
-          const s = hwSh(c),
+          const v = hwCV(c),
             k = p.id + "_" + d;
-          return `<td class="${s ? "hz-on" : "hz-off"}"><input id="hz_i_${k}" value="${s ? hwFmt(s[0]) : ""}" inputmode="decimal" aria-label="Ingreso ${esc(p.name)} ${HDL[d]}" onchange="hwEdit('${p.id}',${d})"></td><td class="${s ? "hz-on" : "hz-off"}"><input id="hz_o_${k}" value="${s ? hwFmt(s[1]) : ""}" inputmode="decimal" aria-label="Salida ${esc(p.name)} ${HDL[d]}" onchange="hwEdit('${p.id}',${d})"></td><td id="hz_h_${k}">${hwFmt(s ? s[1] - s[0] : 0)}</td>`;
+          return `<td class="${v.cls}"><input id="hz_i_${k}" value="${v.i}" inputmode="decimal" aria-label="Ingreso ${esc(p.name)} ${HDL[d]}" onchange="hwEdit('${p.id}',${d},0)"></td><td class="${v.cls}"><input id="hz_o_${k}" value="${v.o}" inputmode="decimal" aria-label="Salida ${esc(p.name)} ${HDL[d]}" onchange="hwEdit('${p.id}',${d},1)"></td><td id="hz_h_${k}">${hwFmt(v.h)}</td>`;
         })
         .join("")}<td class="hz-tt" id="hz_t_${p.id}">${hwFmt(t.tot)}</td><td id="hz_s_${p.id}">${hwFmt(t.s)}</td><td id="hz_z_${p.id}">${hwFmt(t.zo)}</td><td>0,0</td></tr>`;
     })
-    .join("")}</tbody></table></div>`;
+    .join("")}</tbody></table></div>
+<div class="hz-lg"><span><i class="hz-d hz-d-h2"></i>Turno</span><span><i class="hz-d hz-d-d"></i>Descanso</span><span><i class="hz-d hz-d-v"></i>Vacaciones</span><span><i class="hz-d hz-d-i"></i>Incapacidad</span></div>`;
 }
+
+const hwItem = (x) => (typeof x == "string" ? { t: "h", s: x } : x),
+  hwDot = (t) => `<i class="hz-d hz-d-${t}"></i>`;
+
+const HGUIDE = `<details class="hz-gd"><summary>¿Qué frases entiende?</summary>
+<div class="hz-gl"><p><span class="hz-d hz-d-d"></span><b>Descanso</b> (negro): <i>Cesar descansa el martes</i> · <i>Gabriel libre el jueves</i> · <i>Rosimar permiso el viernes</i> · <i>Josué prefiere descansar el sábado</i></p>
+<p><span class="hz-d hz-d-v"></span><b>Vacaciones</b> (azul claro): <i>Elvis vacaciones del lunes al miércoles</i> · <i>Cesar de vacaciones toda la semana</i> · <i>Gabriel vacaciones desde el jueves</i></p>
+<p><span class="hz-d hz-d-i"></span><b>Incapacidad</b> (verde semi claro): <i>Josué incapacidad hasta el jueves</i> · <i>Rosimar enferma viernes y sábado</i> · <i>Cesar cita médica el martes</i></p>
+<p><span class="hz-d hz-d-h"></span><b>Horas</b>: <i>Gabriel entra a las 14 el viernes</i> · <i>Cesar sale a las 18 el lunes</i> · <i>Rosimar de 10 a 18 el sábado</i> · <i>Josué desde las 12</i> · <i>Elvis hasta las 17</i></p>
+<p><span class="hz-d hz-d-h"></span><b>Abrir o cerrar</b>: <i>Josué no puede cerrar el jueves</i> · <i>Cesar no abre</i> · <i>Elvis abre el lunes</i> · <i>Rosimar cierra el viernes</i></p>
+<p><span class="hz-d hz-d-e"></span><b>Demanda</b>: <i>Evento el sábado, más gente</i> · <i>Lunes día flojo</i></p>
+<p class="mu">Puedes juntar varias personas: <i>Cesar y Gabriel descansan el martes</i> o <i>Cesar descansa el martes y Gabriel el jueves</i>. Si falta el día, el sistema te lo dice. Una novedad por renglón.</p></div></details>`;
 
 V.hor = function () {
   const cfg = hwCfg(),
@@ -655,7 +752,9 @@ V.hor = function () {
   if (!HZ.doc && !HZ.dirty && C.hor && C.hor["w_" + HZ.start]) hwLoad();
   const lb = HZ.start == nxt ? "Próxima semana" : HZ.start < nxt ? "Semana anterior" : "Semana más adelante",
     doc = HZ.doc,
-    ex = `Ejemplo:\nCesar descansa el martes\nGabriel entra a las 14 el viernes\nJosué no puede cerrar el jueves\nRosimar de 10 a 18 el sábado\nEvento el sábado, más gente`;
+    ex = `Ejemplo:\nCesar descansa el martes\nElvis vacaciones del lunes al miércoles\nJosué incapacidad hasta el jueves\nGabriel entra a las 14 el viernes\nRosimar de 10 a 18 el sábado\nEvento el sábado, más gente`,
+    oks = (doc && doc.ok ? doc.ok : []).map(hwItem),
+    unk = (doc && doc.unk ? doc.unk : []).map((x) => (typeof x == "string" ? { s: x, why: "" } : x));
   return (
     head(
       "Horarios",
@@ -663,13 +762,13 @@ V.hor = function () {
       `<button class="btn" onclick="hwRun()">Generar horario</button> <button class="btn s" onclick="hwTeamModal()">Equipo y reglas</button>`,
     ) +
     `<div class="hz-nav hz-np"><button class="btn s" onclick="hwWeek(-7)">‹ Semana anterior</button>${HZ.start != nxt ? `<button class="btn g" onclick="hwWeek(0)">Ir a la próxima semana</button>` : ""}<button class="btn s" onclick="hwWeek(7)">Semana siguiente ›</button></div>` +
-    `<div class="cd hz-np"><h2>Novedades y parámetros de esta semana</h2><p class="mu">Escribe lo que cambia: descansos, permisos, incapacidades, horas de entrada o salida, quién no puede abrir o cerrar, días con evento o más gente. Una novedad por renglón.</p><textarea id="hzn" rows="5" placeholder="${esc(ex)}" oninput="HZ.notes=this.value;HZ.dirty=1">${esc(HZ.notes)}</textarea><p style="margin-top:12px"><button class="btn" onclick="hwRun()">${doc ? "Generar de nuevo" : "Generar horario"}</button></p></div>` +
+    `<div class="cd hz-np"><h2>Novedades y parámetros de esta semana</h2><p class="mu">Escribe lo que cambia esta semana: descansos, vacaciones, incapacidades, horas de entrada o salida, quién no puede abrir o cerrar, días con evento. Una novedad por renglón.</p><textarea id="hzn" rows="5" placeholder="${esc(ex)}" oninput="HZ.notes=this.value;HZ.dirty=1">${esc(HZ.notes)}</textarea>${HGUIDE}<p style="margin-top:12px"><button class="btn" onclick="hwRun()">${doc ? "Generar de nuevo" : "Generar horario"}</button></p></div>` +
     (doc
       ? `${
-          (doc.ok || []).length || (doc.unk || []).length
-            ? `<div class="cd hz-np"><h2>Lo que entendí de las novedades</h2>${(doc.ok || []).length ? `<ul class="hz-ul">${doc.ok.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}${(doc.unk || []).length ? `<p class="mu" style="margin-top:8px">No pude interpretar (revísalas o escríbelas de otra forma):</p><ul class="hz-ul hz-bad">${doc.unk.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}</div>`
+          oks.length || unk.length
+            ? `<div class="cd hz-np"><h2>Lo que entendí de las novedades</h2>${oks.length ? `<ul class="hz-ul hz-ok">${oks.map((x) => `<li>${hwDot(x.t)}${esc(x.s)}</li>`).join("")}</ul>` : ""}${unk.length ? `<p class="mu" style="margin-top:8px">No pude aplicar estas (corrígelas y vuelve a generar):</p><ul class="hz-ul hz-bad">${unk.map((x) => `<li>${esc(x.s)}${x.why ? ` <small>— ${esc(x.why)}</small>` : ""}</li>`).join("")}</ul>` : ""}</div>`
             : ""
-        }<div class="cd"><div class="pvh hz-np"><h2 style="margin:0">Horario de la semana</h2><span class="hz-bt"><button class="btn" onclick="hwSave()">${HZ.dirty ? "Guardar horario" : "Guardado ✓"}</button><button class="btn s" onclick="hwCopy()">Copiar para Excel</button><button class="btn s" onclick="window.print()">Imprimir</button></span></div>${hwTable(doc, cfg)}<p class="mu hz-np" style="margin-top:10px">Puedes corregir cualquier hora tocándola. Para dejar un descanso, borra ingreso y salida. Las horas van en formato de 24 horas.</p></div><div class="cd hz-np" id="hz_w">${hwWarnHtml()}</div>`
+        }<div class="cd"><div class="pvh hz-np"><h2 style="margin:0">Horario de la semana</h2><span class="hz-bt"><button class="btn" onclick="hwSave()">${HZ.dirty ? "Guardar horario" : "Guardado ✓"}</button><button class="btn s" onclick="hwCopy()">Copiar para Excel</button><button class="btn s" onclick="window.print()">Imprimir</button></span></div>${hwTable(doc, cfg)}<p class="mu hz-np" style="margin-top:10px">Puedes corregir cualquier hora tocándola. Escribe <b>V</b> para vacaciones, <b>I</b> para incapacidad, o borra ingreso y salida para dejar descanso. Las horas van en formato de 24 horas.</p></div><div class="cd hz-np" id="hz_w">${hwWarnHtml()}</div>`
       : `<div class="empty hz-np"><p>Todavía no hay horario para esta semana. Escribe las novedades (si las hay) y pulsa <b>Generar horario</b>.</p></div>`)
   );
 };
@@ -698,20 +797,32 @@ function hwRun2() {
   toast("Horario generado. Revísalo y pulsa Guardar");
 }
 
-function hwEdit(pid, d) {
-  const a = hwNum($("#hz_i_" + pid + "_" + d).value),
-    b = hwNum($("#hz_o_" + pid + "_" + d).value),
-    ok = isFinite(a) && isFinite(b) && b > a && a >= 0 && b <= 24,
-    k = pid + "_" + d;
-  HZ.doc.cells[pid][d] = ok ? a + "-" + b : "";
+function hwEdit(pid, d, w) {
+  const ie = $("#hz_i_" + pid + "_" + d),
+    oe = $("#hz_o_" + pid + "_" + d),
+    ch = (w ? oe : ie).value.trim().toLowerCase(),
+    k = pid + "_" + d,
+    cur = HZ.doc.cells[pid][d];
+  let val;
+  if (/^v/.test(ch)) val = "V";
+  else if (/^i/.test(ch)) val = "I";
+  else if (!ie.value.trim() && !oe.value.trim()) val = "";
+  else {
+    const a = hwNum(ie.value),
+      b = hwNum(oe.value);
+    if (!isFinite(a) || !isFinite(b)) return; //  falta el otro dato: espera a que lo escriban
+    if (!(b > a && a >= 0 && b <= 24)) {
+      toast("La salida debe ser después del ingreso");
+      val = cur;
+    } else val = a + "-" + b;
+  }
+  HZ.doc.cells[pid][d] = val;
   HZ.dirty = 1;
-  const s = hwSh(HZ.doc.cells[pid][d]),
-    i = $("#hz_i_" + k),
-    o = $("#hz_o_" + k);
-  i.value = s ? hwFmt(s[0]) : "";
-  o.value = s ? hwFmt(s[1]) : "";
-  i.parentNode.className = o.parentNode.className = s ? "hz-on" : "hz-off";
-  $("#hz_h_" + k).textContent = hwFmt(s ? s[1] - s[0] : 0);
+  const v = hwCV(val);
+  ie.value = v.i;
+  oe.value = v.o;
+  ie.parentNode.className = oe.parentNode.className = v.cls;
+  $("#hz_h_" + k).textContent = hwFmt(v.h);
   const t = hwTot(hwCfg(), HZ.doc.cells[pid]);
   $("#hz_t_" + pid).textContent = hwFmt(t.tot);
   $("#hz_s_" + pid).textContent = hwFmt(t.s);
@@ -757,7 +868,7 @@ function hwCopy() {
         p.name,
         ...row.flatMap((c) => {
           const s = hwSh(c);
-          return s ? [hwFmt(s[0]), hwFmt(s[1]), hwFmt(s[1] - s[0])] : ["", "", "0,0"];
+          return s ? [hwFmt(s[0]), hwFmt(s[1]), hwFmt(s[1] - s[0])] : c === "V" ? ["VAC", "VAC", "0,0"] : c === "I" ? ["INC", "INC", "0,0"] : ["", "", "0,0"];
         }),
         hwFmt(t.tot),
         hwFmt(t.s),
@@ -793,7 +904,7 @@ function hwTeamModal(keep) {
     `<p class="mu">Estos datos son solo parámetros para generar: no aparecen en el horario.</p><h2>Equipo</h2><div id="hzt">${team
       .map(
         (p, i) =>
-          `<div class="hz-p"><input class="hz-n" value="${esc(p.name)}" placeholder="Nombre" aria-label="Nombre"><div class="hz-k"><span class="mu hz-lb">Sabe hacer</span><label class="pil"><input type="checkbox" class="hz-l" ${p.lid ? "checked" : ""}><span>Líder</span></label>${HSK.map(([k, l]) => ck("hz-s", k, l, p.sk.includes(k))).join("")}</div><div class="hz-k"><span class="mu hz-lb">Turnos</span>${HTP.map(([k, l]) => ck("hz-t", k, l, p.tp.includes(k))).join("")}</div><div class="hz-k"><span class="mu hz-lb">No puede descansar</span>${HDS.map((l, d) => ck("hz-r", d, l, p.nr.includes(d))).join("")}<button class="btn x" onclick="hwDelP(${i})">Quitar</button></div></div>`,
+          `<div class="hz-p"><input class="hz-n" value="${esc(p.name)}" placeholder="Nombre" aria-label="Nombre"><div class="hz-k"><span class="mu hz-lb">Funciones</span><label class="pil"><input type="checkbox" class="hz-l" ${p.lid ? "checked" : ""}><span>Líder</span></label>${HSK.map(([k, l]) => ck("hz-s", k, l, p.sk.includes(k))).join("")}</div><div class="hz-k"><span class="mu hz-lb">Turnos</span>${HTP.map(([k, l]) => ck("hz-t", k, l, p.tp.includes(k))).join("")}</div><div class="hz-k"><span class="mu hz-lb">No puede descansar</span>${HDS.map((l, d) => ck("hz-r", d, l, p.nr.includes(d))).join("")}<button class="btn x" onclick="hwDelP(${i})">Quitar</button></div></div>`,
       )
       .join("")}</div><p style="margin:8px 0 14px"><button class="btn s" onclick="hwAddP()">+ Persona</button></p><h2>Horario de cada día</h2><p class="mu">La hora en que entra el equipo, cuándo inicia el servicio, cuándo cierra el local y cuándo sale el equipo (la última hora es de limpieza y cierre). Formato de 24 horas.</p><div class="hz-dg"><b></b><b>Entra</b><b>Inicia servicio</b><b>Cierra local</b><b>Sale</b>${r.dias
       .map(
