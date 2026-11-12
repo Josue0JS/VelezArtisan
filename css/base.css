@@ -2,7 +2,7 @@
    Base: colores, tipografía, estructura y componentes principales. */
 
 :root {
-  --bg: #f4f1ec;
+  --bg: #b6b0b0b0;
   --sf: rgba(255, 255, 255, 0.5);
   --sh: rgba(255, 255, 255, 0.82);
   --gb: rgba(255, 255, 255, 0.95);
