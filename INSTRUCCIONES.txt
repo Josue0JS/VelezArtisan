@@ -1,0 +1,7 @@
+1. Copia assets/icons/*.png a tu proyecto principal en assets/icons/.
+2. Reemplaza manifest.webmanifest de la raiz por el incluido.
+3. En index.html, cambia el href de apple-touch-icon a assets/icons/apple-touch-icon.png.
+4. En sw.js, cambia CACHE a velezartisan-static-v2 para renovar cache.
+5. Ejecuta npm run build desde la raiz del proyecto.
+6. Publica el contenido actualizado de www/ en VelezArtisan-preview.
+7. En iPhone elimina el icono anterior y vuelve a agregar la web desde Safari para actualizarlo.
